@@ -1,0 +1,5 @@
+service : {
+  addMessage: (text, text) -> ();
+  generateResponse: (text) -> (text);
+  getMessages: () -> (vec text) query;
+}
