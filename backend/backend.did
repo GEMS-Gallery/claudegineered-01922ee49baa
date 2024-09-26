@@ -1,6 +1,10 @@
 service : {
   addMessage: (text, text) -> ();
-  autoMode: (nat, text) -> (vec text);
+  autoMode: (text, nat, text) -> (vec text);
+  callAnthropicAPI: (text, vec record {
+                                 text;
+                                 text;
+                               }) -> (text);
   createOrUpdateFile: (text, text) -> ();
   executeCode: (text) -> (text);
   getConversationHistory: () -> (vec record {

@@ -1,7 +1,16 @@
 export const idlFactory = ({ IDL }) => {
   return IDL.Service({
     'addMessage' : IDL.Func([IDL.Text, IDL.Text], [], []),
-    'autoMode' : IDL.Func([IDL.Nat, IDL.Text], [IDL.Vec(IDL.Text)], []),
+    'autoMode' : IDL.Func(
+        [IDL.Text, IDL.Nat, IDL.Text],
+        [IDL.Vec(IDL.Text)],
+        [],
+      ),
+    'callAnthropicAPI' : IDL.Func(
+        [IDL.Text, IDL.Vec(IDL.Tuple(IDL.Text, IDL.Text))],
+        [IDL.Text],
+        [],
+      ),
     'createOrUpdateFile' : IDL.Func([IDL.Text, IDL.Text], [], []),
     'executeCode' : IDL.Func([IDL.Text], [IDL.Text], []),
     'getConversationHistory' : IDL.Func(

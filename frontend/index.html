@@ -107,7 +107,6 @@
     <script>
         let apiKey = '';
         let conversationHistory = [];
-        let fileContents = {};
         let voiceMode = false;
         let ttsEnabled = false;
         let autoMode = false;
@@ -163,7 +162,8 @@
             }
 
             try {
-                const response = await callAnthropicAPI(userInput);
+                await callCanister('addMessage', { role: 'user', content: userInput });
+                const response = await callCanister('callAnthropicAPI', { apiKey, messages: conversationHistory });
                 appendMessage('assistant', response);
                 await callCanister('addMessage', { role: 'assistant', content: response });
                 updateTokenUsage();
@@ -191,39 +191,7 @@
             messageDiv.textContent = content;
             chatbox.appendChild(messageDiv);
             chatbox.scrollTop = chatbox.scrollHeight;
-            conversationHistory.push({ role, content });
-        }
-
-        async function callAnthropicAPI(userInput) {
-            if (!apiKey) {
-                throw new Error('API key not found. Please enter your API key.');
-            }
-
-            const messages = conversationHistory.slice(-10).map(msg => ({
-                role: msg.role,
-                content: msg.content
-            }));
-            messages.push({ role: 'user', content: userInput });
-
-            const response = await fetch('https://api.anthropic.com/v1/messages', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'x-api-key': apiKey,
-                },
-                body: JSON.stringify({
-                    model: "claude-3-sonnet-20240320",
-                    max_tokens: 1024,
-                    messages: messages
-                })
-            });
-
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-
-            const data = await response.json();
-            return data.content[0].text;
+            conversationHistory.push([role, content]);
         }
 
         async function resetConversation() {
@@ -235,7 +203,7 @@
         }
 
         function saveChat() {
-            const chatContent = conversationHistory.map(msg => `${msg.role}: ${msg.content}`).join('\n\n');
+            const chatContent = conversationHistory.map(msg => `${msg[0]}: ${msg[1]}`).join('\n\n');
             const blob = new Blob([chatContent], { type: 'text/plain' });
             const a = document.createElement('a');
             a.href = URL.createObjectURL(blob);
@@ -283,7 +251,7 @@
             if (autoMode) {
                 appendMessage('assistant', `AutoMode activated. It will run for up to ${MAX_AUTOMODE_ITERATIONS} iterations.`);
                 const userInput = document.getElementById('userInput').value;
-                const responses = await callCanister('autoMode', { iterations: MAX_AUTOMODE_ITERATIONS, initialPrompt: userInput });
+                const responses = await callCanister('autoMode', { apiKey, iterations: MAX_AUTOMODE_ITERATIONS, initialPrompt: userInput });
                 for (const response of responses) {
                     appendMessage('assistant', response);
                     if (ttsEnabled) {
@@ -330,8 +298,8 @@
             }
         }
 
-       function updateTokenUsage() {
-            const totalTokens = conversationHistory.reduce((sum, msg) => sum + msg.content.split(' ').length, 0);
+        function updateTokenUsage() {
+            const totalTokens = conversationHistory.reduce((sum, msg) => sum + msg[1].split(' ').length, 0);
             const percentageUsed = (totalTokens / MAX_CONTEXT_TOKENS) * 100;
             document.getElementById('tokenUsage').textContent = `Approximate token usage: ${totalTokens} (${percentageUsed.toFixed(2)}% of max context)`;
         }

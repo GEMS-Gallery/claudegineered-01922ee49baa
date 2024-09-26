@@ -1,92 +1,81 @@
+import ExperimentalCycles "mo:base/ExperimentalCycles";
 import Hash "mo:base/Hash";
+import List "mo:base/List";
 
 import Array "mo:base/Array";
+import Buffer "mo:base/Buffer";
+import Cycles "mo:base/ExperimentalCycles";
+import Debug "mo:base/Debug";
 import HashMap "mo:base/HashMap";
 import Iter "mo:base/Iter";
 import Nat "mo:base/Nat";
 import Text "mo:base/Text";
+import Time "mo:base/Time";
 
-actor {
-  private stable var messageEntries : [(Text, Text)] = [];
-  private var messages = HashMap.HashMap<Text, Text>(10, Text.equal, Text.hash);
-  private stable var fileEntries : [(Text, Text)] = [];
-  private var files = HashMap.HashMap<Text, Text>(10, Text.equal, Text.hash);
+actor ClaudeChat {
+    // File storage
+    private var files = HashMap.HashMap<Text, Text>(0, Text.equal, Text.hash);
 
-  private func loadData() {
-    for ((k, v) in messageEntries.vals()) {
-      messages.put(k, v);
-    };
-    for ((k, v) in fileEntries.vals()) {
-      files.put(k, v);
-    };
-  };
+    // Conversation history
+    private var conversationHistory = Buffer.Buffer<(Text, Text)>(0);
 
-  system func preupgrade() {
-    messageEntries := Iter.toArray(messages.entries());
-    fileEntries := Iter.toArray(files.entries());
-  };
-
-  system func postupgrade() {
-    messageEntries := [];
-    fileEntries := [];
-  };
-
-  public func addMessage(role: Text, content: Text) : async () {
-    let id = Nat.toText(messages.size());
-    messages.put(id, role # ": " # content);
-  };
-
-  public query func getConversationHistory() : async [(Text, Text)] {
-    Iter.toArray(messages.entries())
-  };
-
-  public func resetConversation() : async () {
-    messages := HashMap.HashMap<Text, Text>(10, Text.equal, Text.hash);
-  };
-
-  public func autoMode(iterations: Nat, initialPrompt: Text) : async [Text] {
-    var responses : [Text] = [];
-    var currentPrompt = initialPrompt;
-
-    for (i in Iter.range(0, iterations - 1)) {
-      let response = await generateResponse(currentPrompt);
-      responses := Array.append(responses, [response]);
-      currentPrompt := response;
+    // Create or update a file
+    public func createOrUpdateFile(name : Text, content : Text) : async () {
+        files.put(name, content);
     };
 
-    responses
-  };
+    // Read a file
+    public query func readFile(name : Text) : async ?Text {
+        files.get(name)
+    };
 
-  public func createOrUpdateFile(name: Text, content: Text) : async () {
-    files.put(name, content);
-  };
+    // List all files
+    public query func listFiles() : async [(Text, Text)] {
+        Iter.toArray(files.entries())
+    };
 
-  public query func readFile(name: Text) : async ?Text {
-    files.get(name)
-  };
+    // Add a message to the conversation history
+    public func addMessage(role : Text, content : Text) : async () {
+        if (conversationHistory.size() >= 20) {
+            ignore conversationHistory.removeLast();
+        };
+        conversationHistory.add((role, content));
+    };
 
-  public query func listFiles() : async [(Text, Text)] {
-    Iter.toArray(files.entries())
-  };
+    // Get the conversation history
+    public query func getConversationHistory() : async [(Text, Text)] {
+        Buffer.toArray(conversationHistory)
+    };
 
-  public func executeCode(code: Text) : async Text {
-    // Note: This is a placeholder. Actual code execution would require a safe execution environment.
-    "Code execution result: " # code
-  };
+    // Reset the conversation
+    public func resetConversation() : async () {
+        conversationHistory.clear();
+    };
 
-  private func generateResponse(input: Text) : async Text {
-    let lowercaseInput = Text.toLowercase(input);
-    if (Text.contains(lowercaseInput, #text "hello") or Text.contains(lowercaseInput, #text "hi")) {
-      return "Hello! How can I assist you with engineering tasks today?";
-    } else if (Text.contains(lowercaseInput, #text "bye") or Text.contains(lowercaseInput, #text "goodbye")) {
-      return "Goodbye! Feel free to come back if you have more engineering questions.";
-    } else if (Text.contains(lowercaseInput, #text "thank")) {
-      return "You're welcome! Is there anything else I can help you with?";
-    } else {
-      return "As an AI engineer assistant, I'm here to help. Could you please provide more details about your engineering question or problem?";
-    }
-  };
+    // Call Anthropic API (Note: This is a placeholder and won't work directly on IC due to HTTPS limitations)
+    public func callAnthropicAPI(apiKey : Text, messages : [(Text, Text)]) : async Text {
+        // In a production environment, you'd need to use an HTTP outcalls feature or an oracle
+        // For demonstration, we'll return a placeholder response
+        "This is a placeholder response. In a real implementation, this would be the response from the Anthropic API."
+    };
 
-  // Initialize the actor
-  loadData();
+    // Execute code (Note: This is a simplified version and has security implications)
+    public func executeCode(code : Text) : async Text {
+        // Since we can't execute arbitrary code in Motoko, we'll return a placeholder message
+        "Code execution is not supported in this environment. Received code: " # code
+    };
+
+    // AutoMode implementation
+    public func autoMode(apiKey : Text, iterations : Nat, initialPrompt : Text) : async [Text] {
+        var responses = Buffer.Buffer<Text>(0);
+        var currentPrompt = initialPrompt;
+
+        for (_ in Iter.range(0, iterations - 1)) {
+            let response = await callAnthropicAPI(apiKey, [("user", currentPrompt)]);
+            responses.add(response);
+            currentPrompt := "Continue based on: " # response;
+        };
+
+        Buffer.toArray(responses)
+    };
 }

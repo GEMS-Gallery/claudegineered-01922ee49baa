@@ -4,7 +4,8 @@ import type { IDL } from '@dfinity/candid';
 
 export interface _SERVICE {
   'addMessage' : ActorMethod<[string, string], undefined>,
-  'autoMode' : ActorMethod<[bigint, string], Array<string>>,
+  'autoMode' : ActorMethod<[string, bigint, string], Array<string>>,
+  'callAnthropicAPI' : ActorMethod<[string, Array<[string, string]>], string>,
   'createOrUpdateFile' : ActorMethod<[string, string], undefined>,
   'executeCode' : ActorMethod<[string], string>,
   'getConversationHistory' : ActorMethod<[], Array<[string, string]>>,
