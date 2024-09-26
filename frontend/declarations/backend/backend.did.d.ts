@@ -4,8 +4,13 @@ import type { IDL } from '@dfinity/candid';
 
 export interface _SERVICE {
   'addMessage' : ActorMethod<[string, string], undefined>,
-  'generateResponse' : ActorMethod<[string], string>,
-  'getMessages' : ActorMethod<[], Array<string>>,
+  'autoMode' : ActorMethod<[bigint, string], Array<string>>,
+  'createOrUpdateFile' : ActorMethod<[string, string], undefined>,
+  'executeCode' : ActorMethod<[string], string>,
+  'getConversationHistory' : ActorMethod<[], Array<[string, string]>>,
+  'listFiles' : ActorMethod<[], Array<[string, string]>>,
+  'readFile' : ActorMethod<[string], [] | [string]>,
+  'resetConversation' : ActorMethod<[], undefined>,
 }
 export declare const idlFactory: IDL.InterfaceFactory;
 export declare const init: (args: { IDL: typeof IDL }) => IDL.Type[];

@@ -3,18 +3,367 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Claude Engineer AI Chat</title>
-    <link rel="stylesheet" href="index.css">
+    <title>Claude-3-Sonnet Engineer Chat</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+            line-height: 1.6;
+            margin: 0;
+            padding: 20px;
+            background-color: #ffffff;
+            color: #333333;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background-color: #ffffff;
+            padding: 20px;
+            border: 1px solid #e0e0e0;
+            border-radius: 5px;
+        }
+        h1, h2 {
+            text-align: center;
+            color: #333333;
+        }
+        #apiKeySection, #chatSection {
+            margin-bottom: 20px;
+        }
+        #chatbox {
+            height: 400px;
+            overflow-y: auto;
+            border: 1px solid #e0e0e0;
+            padding: 10px;
+            margin-bottom: 20px;
+            background-color: #f9f9f9;
+        }
+        input[type="text"], input[type="password"], textarea {
+            width: calc(100% - 22px);
+            padding: 10px;
+            margin-bottom: 10px;
+            border: 1px solid #e0e0e0;
+            border-radius: 3px;
+        }
+        button {
+            padding: 10px 15px;
+            background-color: #f0f0f0;
+            color: #333333;
+            border: 1px solid #d0d0d0;
+            border-radius: 3px;
+            cursor: pointer;
+            margin-right: 10px;
+            margin-bottom: 10px;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #e0e0e0;
+        }
+        .user-message {
+            background-color: #f0f0f0;
+            padding: 10px;
+            margin-bottom: 10px;
+            border-radius: 3px;
+        }
+        .assistant-message {
+            background-color: #ffffff;
+            padding: 10px;
+            margin-bottom: 10px;
+            border-radius: 3px;
+            border: 1px solid #e0e0e0;
+        }
+        #tokenUsage, #fileContents {
+            margin-top: 20px;
+            font-size: 0.9em;
+            color: #666666;
+        }
+    </style>
 </head>
 <body>
-    <div id="chat-container">
-        <h1>Claude Engineer AI Chat</h1>
-        <div id="chat-messages"></div>
-        <div id="input-container">
-            <input type="text" id="user-input" placeholder="Type your message...">
-            <button id="send-button">Send</button>
+    <div class="container">
+        <h1>Claude-3-Sonnet Engineer Chat</h1>
+        
+        <div id="apiKeySection">
+            <h2>Enter Your API Key</h2>
+            <input type="password" id="apiKeyInput" placeholder="Enter your Anthropic API key">
+            <button onclick="saveApiKey()">Save API Key</button>
+        </div>
+        
+        <div id="chatSection" style="display:none;">
+            <div id="chatbox"></div>
+            <textarea id="userInput" rows="3" placeholder="Type your message here..."></textarea>
+            <button onclick="sendMessage()">Send</button>
+            <button onclick="toggleVoiceInput()">Voice Input</button>
+            <button onclick="resetConversation()">Reset Conversation</button>
+            <button onclick="saveChat()">Save Chat</button>
+            <button onclick="toggleTTS()">Toggle TTS</button>
+            <button onclick="toggleAutoMode()">Toggle AutoMode</button>
+            <button onclick="createFile()">Create File</button>
+            <button onclick="editFile()">Edit File</button>
+            <button onclick="executeCode()">Execute Code</button>
+            <div id="tokenUsage"></div>
+            <div id="fileContents"></div>
         </div>
     </div>
-    <script type="module" src="index.js"></script>
+
+    <script>
+        let apiKey = '';
+        let conversationHistory = [];
+        let fileContents = {};
+        let voiceMode = false;
+        let ttsEnabled = false;
+        let autoMode = false;
+        const MAX_CONTEXT_TOKENS = 200000;
+        const MAX_AUTOMODE_ITERATIONS = 5;
+        let currentAutoModeIteration = 0;
+
+        // Replace with your actual canister ID
+        const canisterId = "YOUR_CANISTER_ID_HERE";
+
+        async function callCanister(method, args) {
+            const response = await fetch(`http://localhost:8000/api/v1/canister/${canisterId}/${method}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(args),
+            });
+            return response.json();
+        }
+
+        function saveApiKey() {
+            apiKey = document.getElementById('apiKeyInput').value.trim();
+            if (apiKey) {
+                document.getElementById('apiKeySection').style.display = 'none';
+                document.getElementById('chatSection').style.display = 'block';
+                appendMessage('assistant', 'API key saved. Welcome to Claude-3-Sonnet Engineer Chat! How can I assist you today?');
+            } else {
+                alert('Please enter a valid API key.');
+            }
+        }
+
+        async function sendMessage() {
+            const userInput = document.getElementById('userInput').value;
+            if (userInput.trim() === '') return;
+
+            appendMessage('user', userInput);
+            document.getElementById('userInput').value = '';
+
+            if (userInput.toLowerCase() === 'exit') {
+                appendMessage('assistant', 'Thank you for chatting. Goodbye!');
+                return;
+            }
+
+            if (userInput.toLowerCase() === 'reset') {
+                resetConversation();
+                return;
+            }
+
+            if (userInput.toLowerCase() === 'save chat') {
+                saveChat();
+                return;
+            }
+
+            try {
+                const response = await callAnthropicAPI(userInput);
+                appendMessage('assistant', response);
+                await callCanister('addMessage', { role: 'assistant', content: response });
+                updateTokenUsage();
+                if (ttsEnabled) {
+                    speakText(response);
+                }
+
+                if (autoMode && currentAutoModeIteration < MAX_AUTOMODE_ITERATIONS) {
+                    currentAutoModeIteration++;
+                    setTimeout(sendMessage, 2000); // Continue AutoMode after 2 seconds
+                } else if (autoMode) {
+                    appendMessage('assistant', 'AutoMode completed. Max iterations reached.');
+                    autoMode = false;
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                appendMessage('assistant', 'An error occurred while processing your request.');
+            }
+        }
+
+        function appendMessage(role, content) {
+            const chatbox = document.getElementById('chatbox');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = role + '-message';
+            messageDiv.textContent = content;
+            chatbox.appendChild(messageDiv);
+            chatbox.scrollTop = chatbox.scrollHeight;
+            conversationHistory.push({ role, content });
+        }
+
+        async function callAnthropicAPI(userInput) {
+            if (!apiKey) {
+                throw new Error('API key not found. Please enter your API key.');
+            }
+
+            const messages = conversationHistory.slice(-10).map(msg => ({
+                role: msg.role,
+                content: msg.content
+            }));
+            messages.push({ role: 'user', content: userInput });
+
+            const response = await fetch('https://api.anthropic.com/v1/messages', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-api-key': apiKey,
+                },
+                body: JSON.stringify({
+                    model: "claude-3-sonnet-20240320",
+                    max_tokens: 1024,
+                    messages: messages
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            const data = await response.json();
+            return data.content[0].text;
+        }
+
+        async function resetConversation() {
+            conversationHistory = [];
+            document.getElementById('chatbox').innerHTML = '';
+            await callCanister('resetConversation', {});
+            appendMessage('assistant', 'Conversation has been reset.');
+            updateTokenUsage();
+        }
+
+        function saveChat() {
+            const chatContent = conversationHistory.map(msg => `${msg.role}: ${msg.content}`).join('\n\n');
+            const blob = new Blob([chatContent], { type: 'text/plain' });
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = 'chat_log.txt';
+            a.click();
+        }
+
+        function toggleVoiceInput() {
+            if (!('webkitSpeechRecognition' in window)) {
+                alert('Voice recognition is not supported in your browser.');
+                return;
+            }
+
+            voiceMode = !voiceMode;
+            if (voiceMode) {
+                const recognition = new webkitSpeechRecognition();
+                recognition.continuous = false;
+                recognition.lang = 'en-US';
+                recognition.onresult = function(event) {
+                    const transcript = event.results[0][0].transcript;
+                    document.getElementById('userInput').value = transcript;
+                    voiceMode = false;
+                    sendMessage();
+                };
+                recognition.start();
+                appendMessage('assistant', 'Listening... Speak now.');
+            } else {
+                appendMessage('assistant', 'Voice input mode deactivated.');
+            }
+        }
+
+        function toggleTTS() {
+            ttsEnabled = !ttsEnabled;
+            appendMessage('assistant', ttsEnabled ? 'Text-to-speech enabled.' : 'Text-to-speech disabled.');
+        }
+
+        function speakText(text) {
+            const utterance = new SpeechSynthesisUtterance(text);
+            window.speechSynthesis.speak(utterance);
+        }
+
+        async function toggleAutoMode() {
+            autoMode = !autoMode;
+            currentAutoModeIteration = 0;
+            if (autoMode) {
+                appendMessage('assistant', `AutoMode activated. It will run for up to ${MAX_AUTOMODE_ITERATIONS} iterations.`);
+                const userInput = document.getElementById('userInput').value;
+                const responses = await callCanister('autoMode', { iterations: MAX_AUTOMODE_ITERATIONS, initialPrompt: userInput });
+                for (const response of responses) {
+                    appendMessage('assistant', response);
+                    if (ttsEnabled) {
+                        speakText(response);
+                    }
+                }
+                autoMode = false;
+            } else {
+                appendMessage('assistant', 'AutoMode deactivated.');
+            }
+        }
+
+        async function createFile() {
+            const fileName = prompt("Enter file name:");
+            if (fileName) {
+                const content = prompt("Enter file content:");
+                await callCanister('createOrUpdateFile', { name: fileName, content: content });
+                appendMessage('assistant', `File '${fileName}' created successfully.`);
+                updateFileContents();
+            }
+        }
+
+        async function editFile() {
+            const fileName = prompt("Enter file name to edit:");
+            const currentContent = await callCanister('readFile', { name: fileName });
+            if (currentContent !== null) {
+                const newContent = prompt("Enter new content:", currentContent);
+                if (newContent !== null) {
+                    await callCanister('createOrUpdateFile', { name: fileName, content: newContent });
+                    appendMessage('assistant', `File '${fileName}' updated successfully.`);
+                    updateFileContents();
+                }
+            } else {
+                appendMessage('assistant', `File '${fileName}' not found.`);
+            }
+        }
+
+        async function updateFileContents() {
+            const files = await callCanister('listFiles', {});
+            const fileContentsDiv = document.getElementById('fileContents');
+            fileContentsDiv.innerHTML = '<h3>File Contents:</h3>';
+            for (const [fileName, content] of files) {
+                fileContentsDiv.innerHTML += `<strong>${fileName}:</strong> ${content}<br>`;
+            }
+        }
+
+       function updateTokenUsage() {
+            const totalTokens = conversationHistory.reduce((sum, msg) => sum + msg.content.split(' ').length, 0);
+            const percentageUsed = (totalTokens / MAX_CONTEXT_TOKENS) * 100;
+            document.getElementById('tokenUsage').textContent = `Approximate token usage: ${totalTokens} (${percentageUsed.toFixed(2)}% of max context)`;
+        }
+
+        async function executeCode() {
+            const code = prompt("Enter code to execute:");
+            if (code) {
+                try {
+                    const result = await callCanister('executeCode', { code: code });
+                    appendMessage('assistant', `Code execution result: ${result}`);
+                } catch (error) {
+                    appendMessage('assistant', `Error executing code: ${error.message}`);
+                }
+            }
+        }
+
+        async function initializeApp() {
+            try {
+                const history = await callCanister('getConversationHistory', {});
+                for (const [role, content] of history) {
+                    appendMessage(role, content);
+                }
+                updateFileContents();
+                updateTokenUsage();
+            } catch (error) {
+                console.error('Error initializing app:', error);
+                appendMessage('assistant', 'Error initializing the application. Please try refreshing the page.');
+            }
+        }
+
+        // Initialize the application when the page loads
+        window.onload = initializeApp;
+    </script>
 </body>
 </html>

@@ -7,41 +7,74 @@ import Nat "mo:base/Nat";
 import Text "mo:base/Text";
 
 actor {
-  // Chat history storage
   private stable var messageEntries : [(Text, Text)] = [];
   private var messages = HashMap.HashMap<Text, Text>(10, Text.equal, Text.hash);
+  private stable var fileEntries : [(Text, Text)] = [];
+  private var files = HashMap.HashMap<Text, Text>(10, Text.equal, Text.hash);
 
-  // Initialize messages from stable storage
-  private func loadMessages() {
+  private func loadData() {
     for ((k, v) in messageEntries.vals()) {
       messages.put(k, v);
-    }
+    };
+    for ((k, v) in fileEntries.vals()) {
+      files.put(k, v);
+    };
   };
 
-  // Save messages to stable storage
   system func preupgrade() {
     messageEntries := Iter.toArray(messages.entries());
+    fileEntries := Iter.toArray(files.entries());
   };
 
-  // Clear temporary storage after upgrade
   system func postupgrade() {
     messageEntries := [];
+    fileEntries := [];
   };
 
-  // Add a new message to the chat history
-  public func addMessage(sender: Text, content: Text) : async () {
+  public func addMessage(role: Text, content: Text) : async () {
     let id = Nat.toText(messages.size());
-    messages.put(id, sender # ": " # content);
+    messages.put(id, role # ": " # content);
   };
 
-  // Get all messages in the chat history
-  public query func getMessages() : async [Text] {
-    let messageArray = Iter.toArray(messages.vals());
-    Array.sort(messageArray, Text.compare)
+  public query func getConversationHistory() : async [(Text, Text)] {
+    Iter.toArray(messages.entries())
   };
 
-  // Generate a simple AI response
-  public func generateResponse(input: Text) : async Text {
+  public func resetConversation() : async () {
+    messages := HashMap.HashMap<Text, Text>(10, Text.equal, Text.hash);
+  };
+
+  public func autoMode(iterations: Nat, initialPrompt: Text) : async [Text] {
+    var responses : [Text] = [];
+    var currentPrompt = initialPrompt;
+
+    for (i in Iter.range(0, iterations - 1)) {
+      let response = await generateResponse(currentPrompt);
+      responses := Array.append(responses, [response]);
+      currentPrompt := response;
+    };
+
+    responses
+  };
+
+  public func createOrUpdateFile(name: Text, content: Text) : async () {
+    files.put(name, content);
+  };
+
+  public query func readFile(name: Text) : async ?Text {
+    files.get(name)
+  };
+
+  public query func listFiles() : async [(Text, Text)] {
+    Iter.toArray(files.entries())
+  };
+
+  public func executeCode(code: Text) : async Text {
+    // Note: This is a placeholder. Actual code execution would require a safe execution environment.
+    "Code execution result: " # code
+  };
+
+  private func generateResponse(input: Text) : async Text {
     let lowercaseInput = Text.toLowercase(input);
     if (Text.contains(lowercaseInput, #text "hello") or Text.contains(lowercaseInput, #text "hi")) {
       return "Hello! How can I assist you with engineering tasks today?";
@@ -55,5 +88,5 @@ actor {
   };
 
   // Initialize the actor
-  loadMessages();
+  loadData();
 }

@@ -1,5 +1,16 @@
 service : {
   addMessage: (text, text) -> ();
-  generateResponse: (text) -> (text);
-  getMessages: () -> (vec text) query;
+  autoMode: (nat, text) -> (vec text);
+  createOrUpdateFile: (text, text) -> ();
+  executeCode: (text) -> (text);
+  getConversationHistory: () -> (vec record {
+                                       text;
+                                       text;
+                                     }) query;
+  listFiles: () -> (vec record {
+                          text;
+                          text;
+                        }) query;
+  readFile: (text) -> (opt text) query;
+  resetConversation: () -> ();
 }
